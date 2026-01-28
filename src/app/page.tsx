@@ -1,65 +1,258 @@
-import Image from "next/image";
+"use client";
+
+import { useState, type FormEvent } from "react";
+
+type Video = {
+  id: string;
+  title: string;
+  thumbnail: string;
+  url: string;
+};
+
+type AnalyzeResult = {
+  summary: string;
+  toughLove: string;
+  prescription: string;
+  videos: Video[];
+};
 
 export default function Home() {
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<AnalyzeResult | null>(null);
+
+  async function handleSubmit(e: FormEvent) {
+    e.preventDefault();
+
+    const trimmed = text.trim();
+
+    if (!trimmed) {
+      setError("먼저 고민을 솔직하게 적어 주세요.");
+      setResult(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("/api/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ text: trimmed }),
+      });
+
+      const data = (await response.json().catch(() => null)) as
+        | AnalyzeResult
+        | { error?: string }
+        | null;
+
+      if (!response.ok) {
+        const message =
+          (data && "error" in data && data.error) ||
+          "분석 중에 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+        setError(message);
+        setResult(null);
+        return;
+      }
+
+      if (!data || !("summary" in data)) {
+        setError("예상치 못한 응답 형식입니다.");
+        setResult(null);
+        return;
+      }
+
+      setResult({
+        summary: data.summary,
+        toughLove: data.toughLove,
+        prescription: data.prescription,
+        videos: data.videos ?? [],
+      });
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "요청 처리 중 오류가 발생했습니다.",
+      );
+      setResult(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 px-4 py-10 text-slate-50">
+      <main className="mx-auto flex max-w-5xl flex-col gap-8">
+        <header className="space-y-3">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            쓴소리 자판기
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="max-w-2xl text-sm leading-relaxed text-slate-300 sm:text-base">
+            누구한테도 못 한 고민, 여기다 던져 보세요. AI가 심리 분석을 하고,
+            살짝 아픈 쓴소리와 바로 실행할 수 있는 처방전을 ― 그리고 도움이 될
+            만한 YouTube 영상까지 한 번에 뽑아 드립니다.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        </header>
+
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)]">
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-xl shadow-black/40"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-medium text-slate-200 sm:text-base">
+                  고민 입력
+                </h2>
+                <p className="text-xs text-slate-400 sm:text-[13px]">
+                  최대한 구체적으로, 상황과 감정, 내가 이미 해 본 시도까지
+                  적어 주세요.
+                </p>
+              </div>
+              <span className="text-xs text-slate-500">
+                {text.trim().length}자
+              </span>
+            </div>
+
+            <textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="예) 20대 후반 직장인입니다. 회사 일이 너무 바쁜데도 자꾸 미루고, 밤마다 유튜브만 보다가 새벽에 잠들어요..."
+              className="min-h-[180px] w-full resize-none rounded-xl border border-slate-800 bg-slate-950/60 px-3.5 py-3 text-sm leading-relaxed text-slate-50 outline-none ring-0 transition focus:border-sky-500 focus:ring-2 focus:ring-sky-500/40 sm:text-[15px]"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+
+            {error && (
+              <p className="rounded-md border border-red-500/40 bg-red-950/40 px-3 py-2 text-xs text-red-100 sm:text-[13px]">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="mt-2 inline-flex items-center justify-center rounded-full bg-sky-500 px-5 py-2.5 text-sm font-medium text-slate-950 shadow-lg shadow-sky-500/40 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:shadow-none"
+            >
+              {loading ? "AI가 쓴소리 준비 중..." : "쓴소리 & 처방전 받기"}
+            </button>
+          </form>
+
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <ResultCard
+                title="심리 분석 요약"
+                description="지금 당신의 심리 상태와 고민의 핵심을 정리합니다."
+                body={result?.summary}
+                placeholder="고민을 입력하면, AI가 당신의 마음 상태를 요약해 보여줍니다."
+              />
+              <ResultCard
+                title="쓴소리 피드백"
+                description="기분이 살짝 상할 수 있는, 하지만 필요한 한마디들."
+                body={result?.toughLove}
+                placeholder="눈치 안 보고 직설적으로 들을 얘기를 여기에 적어 줍니다."
+              />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)]">
+              <ResultCard
+                title="AI 처방전"
+                description="오늘부터 당장 실행 가능한 행동 지침."
+                body={result?.prescription}
+                placeholder="단순한 위로가 아니라, 할 수밖에 없게 만드는 구체적인 액션 플랜을 알려줍니다."
+              />
+
+              <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+                <div>
+                  <h2 className="text-sm font-medium text-slate-200 sm:text-base">
+                    추천 YouTube 영상
+                  </h2>
+                  <p className="text-xs text-slate-400 sm:text-[13px]">
+                    고민 키워드와 처방전 내용을 바탕으로, 도움이 될 만한 영상들을
+                    골라 드렸습니다.
+                  </p>
+                </div>
+
+                {result && result.videos.length === 0 && (
+                  <p className="mt-1 text-xs text-slate-500 sm:text-[13px]">
+                    적절한 영상을 찾지 못했어요. 고민을 조금 더 구체적으로
+                    적어보는 것도 방법입니다.
+                  </p>
+                )}
+
+                {!result && (
+                  <p className="mt-1 text-xs text-slate-500 sm:text-[13px]">
+                    고민을 입력하면, 관련된 자기계발·심리·습관 교정 영상들을
+                    추천해 드립니다.
+                  </p>
+                )}
+
+                {result && result.videos.length > 0 && (
+                  <ul className="mt-1 flex flex-col gap-3">
+                    {result.videos.map((video) => (
+                      <li
+                        key={video.id}
+                        className="flex gap-3 rounded-xl border border-slate-800/70 bg-slate-900/70 p-2.5"
+                      >
+                        <div className="h-20 w-32 flex-shrink-0 overflow-hidden rounded-lg bg-slate-800">
+                          {video.thumbnail && (
+                            <img
+                              src={video.thumbnail}
+                              alt={video.title}
+                              className="h-full w-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col justify-between gap-1">
+                          <p className="line-clamp-2 text-xs font-medium text-slate-100 sm:text-[13px]">
+                            {video.title}
+                          </p>
+                          <a
+                            href={video.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex w-fit text-xs font-medium text-sky-400 hover:text-sky-300"
+                          >
+                            YouTube에서 열기
+                          </a>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
+    </div>
+  );
+}
+
+type ResultCardProps = {
+  title: string;
+  description: string;
+  body?: string;
+  placeholder: string;
+};
+
+function ResultCard({ title, description, body, placeholder }: ResultCardProps) {
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+      <div>
+        <h2 className="text-sm font-medium text-slate-200 sm:text-base">
+          {title}
+        </h2>
+        <p className="text-xs text-slate-400 sm:text-[13px]">{description}</p>
+      </div>
+      <div className="flex-1 rounded-xl bg-slate-950/40 p-3 text-xs leading-relaxed text-slate-100 sm:text-[13px]">
+        {body ? (
+          <p className="whitespace-pre-line">{body}</p>
+        ) : (
+          <p className="text-slate-500">{placeholder}</p>
+        )}
+      </div>
     </div>
   );
 }
