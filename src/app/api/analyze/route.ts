@@ -10,7 +10,7 @@ type GeminiStructuredResponse = {
   toughLove: string;
   prescription: string;
   keywords: string[];
-  category: "depression" | "anxiety" | "relationship" | "career" | "lazy" | "general";
+  category: "depression" | "anxiety" | "relationship" | "career" | "lazy" | "eating" | "general";
   searchQuery: string;
 };
 
@@ -81,6 +81,26 @@ const MOCK_VIDEOS: Record<string, YouTubeVideo[]> = {
       url: "https://www.youtube.com/results?search_query=인간관계+스트레스",
     },
   ],
+  eating: [
+    {
+      id: "mock9",
+      title: "가짜 배고픔 vs 진짜 배고픔 구분하는 법",
+      thumbnail: "https://img.youtube.com/vi/mock9/hqdefault.jpg",
+      url: "https://www.youtube.com/results?search_query=가짜+배고픔+구분",
+    },
+    {
+      id: "mock10",
+      title: "폭식증 고치는 가장 현실적인 방법 (식이장애 극복)",
+      thumbnail: "https://img.youtube.com/vi/mock10/hqdefault.jpg",
+      url: "https://www.youtube.com/results?search_query=폭식증+극복",
+    },
+    {
+      id: "mock11",
+      title: "배부른데 계속 들어가는 이유? 감정적 허기 해결법",
+      thumbnail: "https://img.youtube.com/vi/mock11/hqdefault.jpg",
+      url: "https://www.youtube.com/results?search_query=감정적+허기",
+    },
+  ],
   general: [
     {
       id: "mock8",
@@ -108,8 +128,8 @@ async function callGemini(userText: string): Promise<GeminiStructuredResponse> {
     '  "summary": "심리 상태와 핵심 고민을 3~4문장으로 요약 (객관적 분석)",',
     '  "toughLove": "쓴소리 스타일의 직설적인 피드백 (4~7문장, 팩트 폭격 스타일)",',
     '  "prescription": "오늘부터 바로 실행할 수 있는 구체적 행동 지침 (번호 목록 형태, 최소 3개). 단, 이 부분의 말투는 매우 친절하고, 격려하며, 할 수 있다는 용기를 주는 따뜻한 문체여야 함 (예: ~해보세요, 충분히 할 수 있어요, 당신을 믿어요)",',
-    '  "category": "고민의 종류를 다음 중 하나로 분류: depression(우울), anxiety(불안), relationship(관계), career(진로), lazy(무기력/게으름), general(기타)",',
-    '  "searchQuery": "YouTube에서 가장 적절한 영상을 찾기 위한 최적화된 검색어 (예: 무기력 극복 동기부여, 자존감 높이는 법)",',
+    '  "category": "고민의 종류를 다음 중 하나로 분류: depression(우울), anxiety(불안), relationship(관계), career(진로), lazy(무기력/게으름), eating(폭식/다이어트/식이장애), general(기타)",',
+    '  "searchQuery": "YouTube 검색 알고리즘이 추천할 법한, 조회수가 높고 반응이 좋은 고민 해결 영상 검색어. 단순 키워드 나열보다는 \'~하는 법\', \'~ 극복 레전드\', \'~ 동기부여\', \'~ 현실적 조언\' 등 사람들이 클릭할 만한 제목 스타일로 작성할 것.",',
     '  "keywords": ["YouTube에서 검색하면 도움 될만한 한국어 키워드 3~5개"]',
     "}",
     "",
@@ -127,6 +147,9 @@ async function callGemini(userText: string): Promise<GeminiStructuredResponse> {
         ],
       },
     ],
+    generationConfig: {
+      responseMimeType: "application/json",
+    },
   };
 
   let retries = 3;
@@ -198,11 +221,21 @@ async function callGemini(userText: string): Promise<GeminiStructuredResponse> {
           category: parsed.category ?? "general",
           searchQuery: parsed.searchQuery ?? "",
         };
-      } catch {
+      } catch (parseError) {
+        console.error("JSON Parse Error:", parseError, "Raw content:", content);
+        
+        // Fallback: 정규식으로 각 섹션 추출 시도 (JSON이 깨졌을 경우를 대비)
+        const summaryMatch = content.match(/"summary"\s*:\s*"([^"]*)"/);
+        const toughLoveMatch = content.match(/"toughLove"\s*:\s*"([^"]*)"/);
+        
+        // prescription은 배열일 수도 있고 문자열일 수도 있어서 좀 더 유연하게 처리 필요하지만, 
+        // 여기서는 간단히 문자열 매칭 시도
+        const prescriptionMatch = content.match(/"prescription"\s*:\s*(\[[^\]]*\]|"[^"]*")/);
+
         return {
-          summary: content,
-          toughLove: "",
-          prescription: "",
+          summary: summaryMatch ? summaryMatch[1] : content, // 실패하면 전체 내용을 요약에 넣음
+          toughLove: toughLoveMatch ? toughLoveMatch[1] : "죄송합니다. 쓴소리 데이터를 불러오지 못했습니다.",
+          prescription: prescriptionMatch ? "처방전 데이터를 불러오는 중 오류가 발생했습니다. 다시 시도해주세요." : "", 
           keywords: [],
           category: "general",
           searchQuery: "",
