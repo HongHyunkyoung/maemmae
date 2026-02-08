@@ -14,6 +14,7 @@ type AnalyzeResult = {
   toughLove: string;
   prescription: string;
   videos: Video[];
+  keywords: string[];
 };
 
 export default function Home() {
@@ -70,6 +71,7 @@ export default function Home() {
         toughLove: data.toughLove,
         prescription: data.prescription,
         videos: data.videos ?? [],
+        keywords: data.keywords ?? [],
       });
     } catch (err) {
       setError(
@@ -189,12 +191,32 @@ export default function Home() {
                 )}
 
                 {result && result.videos.length > 0 && (
-                  <ul className="mt-1 flex flex-col gap-3">
-                    {result.videos.map((video) => (
-                      <li
-                        key={video.id}
-                        className="flex gap-3 rounded-xl border border-slate-800/70 bg-slate-900/70 p-2.5"
-                      >
+                  <div className="mt-2 flex flex-col gap-3">
+                    {/* 키워드 태그 표시 (투명성 확보) */}
+                    {result.keywords && result.keywords.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {result.keywords.map((keyword, i) => (
+                          <a
+                            key={i}
+                            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(
+                              keyword
+                            )}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-md bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700 hover:text-sky-300 transition-colors"
+                          >
+                            #{keyword}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+
+                    <ul className="flex flex-col gap-3">
+                      {result.videos.map((video) => (
+                        <li
+                          key={video.id}
+                          className="flex gap-3 rounded-xl border border-slate-800/70 bg-slate-900/70 p-2.5"
+                        >
                         <div className="h-20 w-32 flex-shrink-0 overflow-hidden rounded-lg bg-slate-800">
                           {video.thumbnail && (
                             <img
@@ -220,6 +242,7 @@ export default function Home() {
                       </li>
                     ))}
                   </ul>
+                  </div>
                 )}
               </div>
             </div>

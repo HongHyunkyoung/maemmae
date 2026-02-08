@@ -26,6 +26,11 @@ type AnalyzeResponse = {
   toughLove: string;
   prescription: string;
   videos: YouTubeVideo[];
+  keywords: string[];
+  debug?: {
+    source: "youtube_api" | "mock_data";
+    searchQuery: string;
+  };
 };
 
 const MOCK_VIDEOS: Record<string, YouTubeVideo[]> = {
@@ -126,11 +131,11 @@ async function callGemini(userText: string): Promise<GeminiStructuredResponse> {
     "JSON 스키마는 다음과 같다:",
     "{",
     '  "summary": "심리 상태와 핵심 고민을 3~4문장으로 요약 (객관적 분석)",',
-    '  "toughLove": "쓴소리 스타일의 직설적인 피드백 (4~7문장, 팩트 폭격 스타일)",',
-    '  "prescription": "오늘부터 바로 실행할 수 있는 구체적 행동 지침 (번호 목록 형태, 최소 3개). 단, 이 부분의 말투는 매우 친절하고, 격려하며, 할 수 있다는 용기를 주는 따뜻한 문체여야 함 (예: ~해보세요, 충분히 할 수 있어요, 당신을 믿어요)",',
-    '  "category": "고민의 종류를 다음 중 하나로 분류: depression(우울), anxiety(불안), relationship(관계), career(진로), lazy(무기력/게으름), eating(폭식/다이어트/식이장애), general(기타)",',
-    '  "searchQuery": "YouTube 검색 알고리즘이 추천할 법한, 조회수가 높고 반응이 좋은 고민 해결 영상 검색어. 단순 키워드 나열보다는 \'~하는 법\', \'~ 극복 레전드\', \'~ 동기부여\', \'~ 현실적 조언\' 등 사람들이 클릭할 만한 제목 스타일로 작성할 것.",',
-    '  "keywords": ["YouTube에서 검색하면 도움 될만한 한국어 키워드 3~5개"]',
+    '  "toughLove": "사용자의 뼈를 때리는 아주 신랄하고 직설적인 비판 (반말 모드). 정신이 번쩍 들게 만드는 매운맛 독설. \'~해요\' 같은 존댓말 절대 금지. 친구가 답답해서 화내듯이 강하게 말할 것 (4~7문장).",',
+    '  "prescription": "오늘부터 바로 실행할 수 있는 구체적 행동 지침 (번호 목록 형태, 최소 3개). 반드시 실행하기 가장 쉬운 아주 작은 일부터 순서대로 나열할 것 (예: 1. 물 한 잔 마시기, 2. 창문 열기...). 말투는 매우 따뜻하고 지지적이어야 하며, \'~해볼까요?\', \'당신은 충분히 할 수 있어요\', \'작은 것부터 시작해요\'와 같이 용기를 주는 표현을 사용할 것.",',
+    '  "category": "고민의 종류를 다음 중 하나로 분류. 우선순위: 1.eating(식욕/폭식/다이어트), 2.depression(우울), 3.anxiety(불안), 4.relationship(관계), 5.career(진로), 6.lazy(무기력/게으름), 7.general(기타). (예: \'먹는 것\'과 관련된 단어가 있으면 무조건 eating으로 분류)",',
+    '  "searchQuery": "사용자의 고민을 해결해 줄 수 있는 YouTube 영상 검색어. 고민의 핵심 명사와 해결책을 조합하여 검색 정확도를 높일 것. (예: \'배부름\' + \'폭식\' -> \'가짜 배고픔 해결법\', \'감정적 허기 다스리기\').",',
+    '  "keywords": ["사용자의 고민에서 추출한 핵심 명사 키워드 3~5개 (예: 폭식, 감정기복, 다이어트)"]',
     "}",
     "",
     "반드시 위 JSON 형식만 반환하고, 설명 문장이나 코드 블록 표시는 절대 포함하지 마라.",
@@ -153,7 +158,7 @@ async function callGemini(userText: string): Promise<GeminiStructuredResponse> {
   };
 
   let retries = 3;
-  let delay = 1000; // 초기 대기 시간 1초
+  let delay = 500; // 초기 대기 시간 0.5초 (사용자 경험 개선)
 
   while (retries > 0) {
     try {
@@ -338,6 +343,47 @@ async function searchYouTube(
     .filter((v): v is YouTubeVideo => v !== null);
 }
 
+function findBestMockVideos(query: string, category: string): YouTubeVideo[] {
+  const allVideos = Object.values(MOCK_VIDEOS).flat();
+  // 검색어에서 의미있는 단어 추출 (단순 공백 분리)
+  const keywords = query.split(/\s+/).filter(k => k.length > 1).map(k => k.toLowerCase());
+
+  if (keywords.length === 0) {
+     return MOCK_VIDEOS[category] || MOCK_VIDEOS["general"];
+  }
+
+  // 1. 키워드 매칭 점수 계산
+  const scored = allVideos.map(video => {
+    let score = 0;
+    const title = video.title.toLowerCase();
+    keywords.forEach(k => {
+      if (title.includes(k)) score += 1;
+    });
+    return { video, score };
+  });
+
+  // 2. 점수 내림차순 정렬
+  scored.sort((a, b) => b.score - a.score);
+
+  // 3. 매칭된 영상이 있으면 상위 2개 반환 (점수가 0보다 큰 경우만)
+  if (scored.length > 0 && scored[0].score > 0) {
+    // 중복 제거 (Set 사용)
+    const uniqueVideos = new Set();
+    const result: YouTubeVideo[] = [];
+    for (const s of scored) {
+        if (s.score > 0 && !uniqueVideos.has(s.video.id)) {
+            uniqueVideos.add(s.video.id);
+            result.push(s.video);
+            if (result.length >= 2) break;
+        }
+    }
+    return result;
+  }
+
+  // 4. 없으면 카테고리 기반 반환 (기존 로직)
+  return MOCK_VIDEOS[category] || MOCK_VIDEOS["general"];
+}
+
 // --- API Route Handler ---
 
 export async function POST(req: NextRequest) {
@@ -361,21 +407,23 @@ export async function POST(req: NextRequest) {
     const searchString = gemini.searchQuery || gemini.keywords?.join(" ") || text.slice(0, 30);
 
     let videos: YouTubeVideo[] = [];
+    let source: "youtube_api" | "mock_data" = "mock_data";
 
     try {
-      // 2. 하이브리드 검색 로직: API 키가 있으면 실제 검색, 없으면 더미 데이터 사용
+      // 2. 하이브리드 검색 로직: API 키가 있으면 실제 검색, 없으면 스마트 더미 데이터 사용
       if (process.env.YOUTUBE_API_KEY) {
         videos = await searchYouTube(searchString);
+        source = "youtube_api";
       } else {
-        console.warn("YOUTUBE_API_KEY is missing, using mock data based on category.");
-        const category = gemini.category || "general";
-        videos = MOCK_VIDEOS[category] || MOCK_VIDEOS["general"];
+        console.warn("YOUTUBE_API_KEY is missing, using smart mock search.");
+        videos = findBestMockVideos(searchString, gemini.category || "general");
+        source = "mock_data";
       }
     } catch (ytError) {
       console.error("YouTube search failed:", ytError);
-      // 3. API 호출 실패 시에도 더미 데이터로 폴백(Fallback)하여 UX 유지
-      const category = gemini.category || "general";
-      videos = MOCK_VIDEOS[category] || MOCK_VIDEOS["general"];
+      // 3. API 호출 실패 시에도 스마트 더미 데이터로 폴백
+      videos = findBestMockVideos(searchString, gemini.category || "general");
+      source = "mock_data";
     }
 
     const response: AnalyzeResponse = {
@@ -383,6 +431,11 @@ export async function POST(req: NextRequest) {
       toughLove: gemini.toughLove,
       prescription: gemini.prescription,
       videos,
+      keywords: gemini.keywords || [],
+      debug: {
+        source,
+        searchQuery: searchString,
+      }
     };
 
     return NextResponse.json(response);
