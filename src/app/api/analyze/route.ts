@@ -5,8 +5,21 @@ const GEMINI_API_URL =
 
 const YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search";
 
+type CategoryDetail = {
+  score: number;
+  keywords: string[];
+  advice: string;
+  detail: string;
+};
+
 type GeminiStructuredResponse = {
-  summary: string;
+  analysis: {
+    personality: CategoryDetail;
+    emotion: CategoryDetail;
+    stress: CategoryDetail;
+    relationship: CategoryDetail;
+    career: CategoryDetail;
+  };
   toughLove: string;
   prescription: string;
   keywords: string[];
@@ -22,7 +35,13 @@ type YouTubeVideo = {
 };
 
 type AnalyzeResponse = {
-  summary: string;
+  analysis: {
+    personality: CategoryDetail;
+    emotion: CategoryDetail;
+    stress: CategoryDetail;
+    relationship: CategoryDetail;
+    career: CategoryDetail;
+  };
   toughLove: string;
   prescription: string;
   videos: YouTubeVideo[];
@@ -130,9 +149,15 @@ async function callGemini(userText: string): Promise<GeminiStructuredResponse> {
     "",
     "JSON 스키마는 다음과 같다:",
     "{",
-    '  "summary": "심리 상태와 핵심 고민을 3~4문장으로 요약 (객관적 분석)",',
-    '  "toughLove": "사용자의 뼈를 때리는 아주 신랄하고 직설적인 비판 (반말 모드). 정신이 번쩍 들게 만드는 매운맛 독설. \'~해요\' 같은 존댓말 절대 금지. 친구가 답답해서 화내듯이 강하게 말할 것 (4~7문장).",',
-    '  "prescription": "오늘부터 바로 실행할 수 있는 구체적 행동 지침 (번호 목록 형태, 최소 3개). 반드시 실행하기 가장 쉬운 아주 작은 일부터 순서대로 나열할 것 (예: 1. 물 한 잔 마시기, 2. 창문 열기...). 말투는 매우 따뜻하고 지지적이어야 하며, \'~해볼까요?\', \'당신은 충분히 할 수 있어요\', \'작은 것부터 시작해요\'와 같이 용기를 주는 표현을 사용할 것.",',
+    '  "analysis": {',
+    '    "personality": { "score": 0~100 (정수), "keywords": ["키워드1", "키워드2", "키워드3"], "advice": "한줄 조언", "detail": "성격 유형 상세 분석 (2~3문장)" },',
+    '    "emotion": { "score": 0~100 (부정적 감정 수치), "keywords": ["감정1", "감정2", "감정3"], "advice": "한줄 조언", "detail": "현재 감정 상태 상세 분석 (2~3문장)" },',
+    '    "stress": { "score": 0~100 (스트레스 지수), "keywords": ["원인1", "원인2", "증상1"], "advice": "한줄 조언", "detail": "스트레스 원인 및 수준 분석 (2~3문장)" },',
+    '    "relationship": { "score": 0~100 (관계 만족도), "keywords": ["관계1", "태도1", "성향1"], "advice": "한줄 조언", "detail": "대인관계 성향 분석 (2~3문장)" },',
+    '    "career": { "score": 0~100 (직업 적합도/만족도), "keywords": ["적성1", "능력1", "태도1"], "advice": "한줄 조언", "detail": "진로 및 직업 성향 분석 (2~3문장)" }',
+    '  },',
+    '  "toughLove": "사용자의 고민 속에 숨어있는 \'의존심\'과 \'책임 회피\'를 정확히 타격하는 냉철한 쓴소리 (반말 모드). \'돈으로 의지를 살 생각 마라\', \'시스템이 널 구원하지 않는다\', \'그건 명백한 회피야\' 같이 사용자가 믿고 있는 핑계를 산산조각 낼 것. 감정적 위로는 일절 배제하고, 오직 팩트와 논리로만 사용자가 스스로의 모순을 직시하게 만들 것. (4~7문장).",',
+    '  "prescription": "오늘부터 당장 실행 가능한 현실적이고 구체적인 행동 지침 (번호 목록 형태, 최소 3개). 첫 문단에 요약 텍스트나 제목 절대 넣지 말 것. 바로 1번부터 시작할 것. 단순히 \'물 마시기\' 같은 가벼운 행동보다는, 고민의 원인을 객관적으로 분석하거나, 채용 공고를 분석하고, 커리큘럼을 비교하는 등 **문제 해결에 직접적으로 도움이 되는 실질적인 솔루션**을 제시할 것. 내용은 날카롭고 현실적이어야 하지만, **말투는 사용자를 응원하는 따뜻하고 지지적인 어조**를 유지할 것 (\'~해볼까요?\', \'작은 목표부터 달성해봐요\', \'당신은 충분히 해낼 수 있어요\').",',
     '  "category": "고민의 종류를 다음 중 하나로 분류. 우선순위: 1.eating(식욕/폭식/다이어트), 2.depression(우울), 3.anxiety(불안), 4.relationship(관계), 5.career(진로), 6.lazy(무기력/게으름), 7.general(기타). (예: \'먹는 것\'과 관련된 단어가 있으면 무조건 eating으로 분류)",',
     '  "searchQuery": "사용자의 고민을 해결해 줄 수 있는 YouTube 영상 검색어. 고민의 핵심 명사와 해결책을 조합하여 검색 정확도를 높일 것. (예: \'배부름\' + \'폭식\' -> \'가짜 배고픔 해결법\', \'감정적 허기 다스리기\').",',
     '  "keywords": ["사용자의 고민에서 추출한 핵심 명사 키워드 3~5개 (예: 폭식, 감정기복, 다이어트)"]',
@@ -216,8 +241,17 @@ async function callGemini(userText: string): Promise<GeminiStructuredResponse> {
         const cleaned = content.replace(/```json\s*|\s*```/g, "");
         const parsed = JSON.parse(cleaned) as GeminiStructuredResponse;
 
+        // Default fallback object if analysis part is missing
+        const defaultDetail = { score: 50, keywords: ["분석불가"], advice: "데이터가 부족합니다.", detail: "분석을 완료하지 못했습니다." };
+
         return {
-          summary: parsed.summary ?? "",
+          analysis: parsed.analysis || {
+            personality: defaultDetail,
+            emotion: defaultDetail,
+            stress: defaultDetail,
+            relationship: defaultDetail,
+            career: defaultDetail
+          },
           toughLove: parsed.toughLove ?? "",
           prescription: Array.isArray(parsed.prescription)
             ? parsed.prescription.join("\n")
@@ -230,17 +264,23 @@ async function callGemini(userText: string): Promise<GeminiStructuredResponse> {
         console.error("JSON Parse Error:", parseError, "Raw content:", content);
         
         // Fallback: 정규식으로 각 섹션 추출 시도 (JSON이 깨졌을 경우를 대비)
-        const summaryMatch = content.match(/"summary"\s*:\s*"([^"]*)"/);
-        const toughLoveMatch = content.match(/"toughLove"\s*:\s*"([^"]*)"/);
+        // Note: With the new complex structure, regex fallback is very hard. 
+        // We will try to return a basic error structure or the demo fallback if available.
+        // For now, let's just return a safe empty object to avoid crash.
         
-        // prescription은 배열일 수도 있고 문자열일 수도 있어서 좀 더 유연하게 처리 필요하지만, 
-        // 여기서는 간단히 문자열 매칭 시도
-        const prescriptionMatch = content.match(/"prescription"\s*:\s*(\[[^\]]*\]|"[^"]*")/);
+        const defaultDetail = { score: 0, keywords: [], advice: "오류 발생", detail: "데이터를 불러오지 못했습니다." };
+        const toughLoveMatch = content.match(/"toughLove"\s*:\s*"([^"]*)"/);
 
         return {
-          summary: summaryMatch ? summaryMatch[1] : content, // 실패하면 전체 내용을 요약에 넣음
+          analysis: {
+             personality: defaultDetail,
+             emotion: defaultDetail,
+             stress: defaultDetail,
+             relationship: defaultDetail,
+             career: defaultDetail
+          },
           toughLove: toughLoveMatch ? toughLoveMatch[1] : "죄송합니다. 쓴소리 데이터를 불러오지 못했습니다.",
-          prescription: prescriptionMatch ? "처방전 데이터를 불러오는 중 오류가 발생했습니다. 다시 시도해주세요." : "", 
+          prescription: "처방전 데이터를 불러오는 중 오류가 발생했습니다. 다시 시도해주세요.", 
           keywords: [],
           category: "general",
           searchQuery: "",
@@ -427,7 +467,7 @@ export async function POST(req: NextRequest) {
     }
 
     const response: AnalyzeResponse = {
-      summary: gemini.summary,
+      analysis: gemini.analysis,
       toughLove: gemini.toughLove,
       prescription: gemini.prescription,
       videos,

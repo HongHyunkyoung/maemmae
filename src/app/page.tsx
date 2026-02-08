@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import AnalysisAccordion, { AnalysisData } from "@/components/AnalysisAccordion";
+import LoadingState from "@/components/LoadingState";
+import ReactMarkdown from "react-markdown";
 
 type Video = {
   id: string;
@@ -60,14 +63,14 @@ export default function Home() {
         return;
       }
 
-      if (!data || !("summary" in data)) {
+      if (!data || !("analysis" in data)) {
         setError("예상치 못한 응답 형식입니다.");
         setResult(null);
         return;
       }
 
       setResult({
-        summary: data.summary,
+        analysis: data.analysis,
         toughLove: data.toughLove,
         prescription: data.prescription,
         videos: data.videos ?? [],
@@ -99,7 +102,7 @@ export default function Home() {
           </p>
         </header>
 
-        <section className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.4fr)]">
+        <section className="flex flex-col gap-6">
           <form
             onSubmit={handleSubmit}
             className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/60 p-5 shadow-xl shadow-black/40"
@@ -141,111 +144,137 @@ export default function Home() {
             </button>
           </form>
 
-          <div className="flex flex-col gap-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <ResultCard
-                title="심리 분석 요약"
-                description="지금 당신의 심리 상태와 고민의 핵심을 정리합니다."
-                body={result?.summary}
-                placeholder="고민을 입력하면, AI가 당신의 마음 상태를 요약해 보여줍니다."
-              />
-              <ResultCard
-                title="쓴소리 피드백"
-                description="기분이 살짝 상할 수 있는, 하지만 필요한 한마디들."
-                body={result?.toughLove}
-                placeholder="눈치 안 보고 직설적으로 들을 얘기를 여기에 적어 줍니다."
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1.1fr)]">
-              <ResultCard
-                title="AI 처방전"
-                description="오늘부터 당장 실행 가능한 행동 지침."
-                body={result?.prescription}
-                placeholder="단순한 위로가 아니라, 할 수밖에 없게 만드는 구체적인 액션 플랜을 알려줍니다."
-              />
-
-              <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
-                <div>
-                  <h2 className="text-sm font-medium text-slate-200 sm:text-base">
-                    추천 YouTube 영상
-                  </h2>
-                  <p className="text-xs text-slate-400 sm:text-[13px]">
-                    고민 키워드와 처방전 내용을 바탕으로, 도움이 될 만한 영상들을
-                    골라 드렸습니다.
-                  </p>
-                </div>
-
-                {result && result.videos.length === 0 && (
-                  <p className="mt-1 text-xs text-slate-500 sm:text-[13px]">
-                    적절한 영상을 찾지 못했어요. 고민을 조금 더 구체적으로
-                    적어보는 것도 방법입니다.
-                  </p>
-                )}
-
-                {!result && (
-                  <p className="mt-1 text-xs text-slate-500 sm:text-[13px]">
-                    고민을 입력하면, 관련된 자기계발·심리·습관 교정 영상들을
-                    추천해 드립니다.
-                  </p>
-                )}
-
-                {result && result.videos.length > 0 && (
-                  <div className="mt-2 flex flex-col gap-3">
-                    {/* 키워드 태그 표시 (투명성 확보) */}
-                    {result.keywords && result.keywords.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {result.keywords.map((keyword, i) => (
-                          <a
-                            key={i}
-                            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(
-                              keyword
-                            )}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="rounded-md bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700 hover:text-sky-300 transition-colors"
-                          >
-                            #{keyword}
-                          </a>
-                        ))}
-                      </div>
-                    )}
-
-                    <ul className="flex flex-col gap-3">
-                      {result.videos.map((video) => (
-                        <li
-                          key={video.id}
-                          className="flex gap-3 rounded-xl border border-slate-800/70 bg-slate-900/70 p-2.5"
-                        >
-                        <div className="h-20 w-32 flex-shrink-0 overflow-hidden rounded-lg bg-slate-800">
-                          {video.thumbnail && (
-                            <img
-                              src={video.thumbnail}
-                              alt={video.title}
-                              className="h-full w-full object-cover"
-                            />
-                          )}
-                        </div>
-                        <div className="flex min-w-0 flex-1 flex-col justify-between gap-1">
-                          <p className="line-clamp-2 text-xs font-medium text-slate-100 sm:text-[13px]">
-                            {video.title}
-                          </p>
-                          <a
-                            href={video.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex w-fit text-xs font-medium text-sky-400 hover:text-sky-300"
-                          >
-                            YouTube에서 열기
-                          </a>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
+          <div className="flex flex-col gap-6">
+            {/* Loading State */}
+            {loading ? (
+              <LoadingState />
+            ) : (
+              <>
+                {/* 1. 심리 분석 (아코디언 그리드) */}
+                {result ? (
+                  <section>
+                    <div className="mb-3">
+                      <h2 className="text-sm font-medium text-slate-200 sm:text-base">
+                        심리 분석 상세
+                      </h2>
+                      <p className="text-xs text-slate-400 sm:text-[13px]">
+                        각 항목을 클릭하여 상세 분석 결과를 확인하세요.
+                      </p>
+                    </div>
+                    <AnalysisAccordion data={result.analysis} />
+                  </section>
+                ) : (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-6 text-center">
+                    <p className="text-sm text-slate-400">
+                      고민을 입력하고 분석 결과를 받아보세요.
+                      <br />
+                      <span className="text-xs text-slate-500 mt-1 block">
+                        성격, 감정, 스트레스 등 5가지 측면에서 정밀하게 분석해 드립니다.
+                      </span>
+                    </p>
                   </div>
                 )}
-              </div>
-            </div>
+
+                {/* 2. 쓴소리 피드백 (단독 카드) */}
+                <ResultCard
+                  title="쓴소리 피드백"
+                  description="기분이 살짝 상할 수 있는, 하지만 필요한 한마디들."
+                  body={result?.toughLove}
+                  placeholder="눈치 안 보고 직설적으로 들을 얘기를 여기에 적어 줍니다."
+                />
+
+                {/* 3. 처방전 & 유튜브 */}
+                <div className="flex flex-col gap-6">
+                  <ResultCard
+                    title="AI 처방전"
+                    description="오늘부터 당장 실행 가능한 행동 지침."
+                    body={result?.prescription}
+                    placeholder="단순한 위로가 아니라, 할 수밖에 없게 만드는 구체적인 액션 플랜을 알려줍니다."
+                  />
+
+                  <div className="flex flex-col gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+                    <div>
+                      <h2 className="text-sm font-medium text-slate-200 sm:text-base">
+                        추천 YouTube 영상
+                      </h2>
+                      <p className="text-xs text-slate-400 sm:text-[13px]">
+                        고민 키워드와 처방전 내용을 바탕으로, 도움이 될 만한 영상들을
+                        골라 드렸습니다.
+                      </p>
+                    </div>
+
+                    {result && result.videos.length === 0 && (
+                      <p className="mt-1 text-xs text-slate-500 sm:text-[13px]">
+                        적절한 영상을 찾지 못했어요. 고민을 조금 더 구체적으로
+                        적어보는 것도 방법입니다.
+                      </p>
+                    )}
+
+                    {!result && (
+                      <p className="mt-1 text-xs text-slate-500 sm:text-[13px]">
+                        고민을 입력하면, 관련된 자기계발·심리·습관 교정 영상들을
+                        추천해 드립니다.
+                      </p>
+                    )}
+
+                    {result && result.videos.length > 0 && (
+                      <div className="mt-2 flex flex-col gap-3">
+                        {/* 키워드 태그 표시 (투명성 확보) */}
+                        {result.keywords && result.keywords.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {result.keywords.map((keyword, i) => (
+                              <a
+                                key={i}
+                                href={`https://www.youtube.com/results?search_query=${encodeURIComponent(
+                                  keyword
+                                )}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="rounded-md bg-slate-800/80 px-2 py-1 text-[11px] text-slate-300 hover:bg-slate-700 hover:text-sky-300 transition-colors"
+                              >
+                                #{keyword}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        <ul className="flex flex-col gap-3">
+                          {result.videos.map((video) => (
+                            <li
+                              key={video.id}
+                              className="flex gap-3 rounded-xl border border-slate-800/70 bg-slate-900/70 p-2.5"
+                            >
+                            <div className="h-20 w-32 flex-shrink-0 overflow-hidden rounded-lg bg-slate-800">
+                              {video.thumbnail && (
+                                <img
+                                  src={video.thumbnail}
+                                  alt={video.title}
+                                  className="h-full w-full object-cover"
+                                />
+                              )}
+                            </div>
+                            <div className="flex min-w-0 flex-1 flex-col justify-between gap-1">
+                              <p className="line-clamp-2 text-xs font-medium text-slate-100 sm:text-[13px]">
+                                {video.title}
+                              </p>
+                              <a
+                                href={video.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex w-fit text-xs font-medium text-sky-400 hover:text-sky-300"
+                              >
+                                YouTube에서 열기
+                              </a>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </section>
       </main>
@@ -271,7 +300,9 @@ function ResultCard({ title, description, body, placeholder }: ResultCardProps) 
       </div>
       <div className="flex-1 rounded-xl bg-slate-950/40 p-3 text-xs leading-relaxed text-slate-100 sm:text-[13px]">
         {body ? (
-          <p className="whitespace-pre-line">{body}</p>
+          <div className="whitespace-pre-line prose prose-invert prose-p:text-slate-100 prose-p:leading-relaxed prose-strong:text-sky-400 prose-strong:font-semibold max-w-none">
+            <ReactMarkdown>{body}</ReactMarkdown>
+          </div>
         ) : (
           <p className="text-slate-500">{placeholder}</p>
         )}
